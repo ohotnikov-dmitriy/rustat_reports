@@ -551,7 +551,7 @@
         <h2>🔐 Авторизация</h2>
         <div class="form-group">
             <label for="passwordInput">Пароль</label>
-            <input type="password" id="passwordInput" placeholder="Введите пароль" autocomplete="current-password">
+            <input type="password" id="passwordInput" placeholder="Введите пароль" autocomplete="current-password" onkeydown="if(event.key==='Enter') login()">
         </div>
         <button class="btn btn-primary" style="width: 100%;" onclick="login()">Войти</button>
     </div>
@@ -661,19 +661,46 @@
         }
 
         // Login
-        function login() {
+        async function login() {
             const password = document.getElementById('passwordInput').value;
             if (!password) {
                 showToast('Введите пароль', 'error');
                 return;
             }
 
-            state.password = password;
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('mainApp').classList.remove('hidden');
-            
-            init();
-            startPolling();
+            const btn = document.querySelector('#loginScreen .btn-primary');
+            btn.disabled = true;
+            btn.textContent = 'Проверка...';
+
+            try {
+                const response = await fetch(`${CONFIG.WORKER_URL}/ping`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${password}` }
+                });
+
+                if (response.status === 401) {
+                    showToast('Неверный пароль', 'error');
+                    return;
+                }
+
+                if (!response.ok) {
+                    showToast('Ошибка сервера: ' + response.status, 'error');
+                    return;
+                }
+
+                state.password = password;
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+
+                init();
+                startPolling();
+
+            } catch (error) {
+                showToast('Не удалось подключиться к серверу', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Войти';
+            }
         }
 
         // Server Selection
