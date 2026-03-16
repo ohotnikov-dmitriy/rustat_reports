@@ -560,45 +560,6 @@
         /* Poll paused indicator */
         .poll-paused { color: var(--accent-primary) !important; }
 
-
-        /* Delete / Clear buttons */
-        .btn-icon {
-            width: 28px;
-            height: 28px;
-            padding: 0;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 6px;
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            line-height: 1;
-        }
-        .btn-icon:hover {
-            background: rgba(255, 68, 102, 0.15);
-            border-color: var(--accent-danger);
-            color: var(--accent-danger);
-        }
-        .btn-clear {
-            padding: 0.3rem 0.75rem;
-            font-size: 0.75rem;
-            background: transparent;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-muted);
-            font-family: 'Azeret Mono', monospace;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .btn-clear:hover {
-            background: rgba(255, 68, 102, 0.15);
-            border-color: var(--accent-danger);
-            color: var(--accent-danger);
-        }
         @media (max-width: 768px) {
             .container { padding: 1rem; }
             .panel { padding: 1.5rem; }
@@ -633,11 +594,11 @@
             <!-- Server Selector -->
             <div class="server-selector">
                 <div class="server-option active" onclick="selectServer('WORLD')" data-server="WORLD">
-                    <div class="server-name">🌍 WORLD</div>
+                    <div class="server-name">WORLD</div>
                     <div class="server-url">api-reports.rustat-service.ru</div>
                 </div>
                 <div class="server-option" onclick="selectServer('RU')" data-server="RU">
-                    <div class="server-name">🇷🇺 RU</div>
+                    <div class="server-name">RU</div>
                     <div class="server-url">proxy.api-reports.rustat-service.ru</div>
                 </div>
             </div>
@@ -673,13 +634,10 @@
 
                 <!-- Right Panel -->
                 <div class="panel">
-                    <div class="panel-header" style="display:flex; align-items:center; justify-content:space-between;">
-                        <span>Очередь отчетов</span>
-                        <span style="display:flex; align-items:center; gap:0.75rem;">
-                            <button class="btn-clear" onclick="clearAllReports()" title="Очистить список">Очистить всё</button>
-                            <span id="pollIndicator" style="font-size: 0.9rem; color: var(--text-muted);">
-                                <span class="spinner"></span> Авто-обновление
-                            </span>
+                    <div class="panel-header">
+                        Очередь отчетов
+                        <span id="pollIndicator" style="float: right; font-size: 0.9rem; color: var(--text-muted);">
+                            <span class="spinner"></span> Авто-обновление
                         </span>
                     </div>
                     
@@ -872,7 +830,7 @@
             const labelClass = optional ? 'optional' : '';
             const required = optional ? '' : 'required';
 
-            // pattern: "short_data": 1  →  flag/toggle
+            // Флаг: тип === 1 (булев параметр)
             if (type === 1) {
                 return `
                     <div class="form-group">
@@ -887,13 +845,11 @@
                 `;
             }
 
-            // pattern: "team": [1,2]  →  select; numeric options → data-type="integer"
             if (Array.isArray(type)) {
-                const allNumeric = type.every(v => typeof v === 'number');
                 return `
                     <div class="form-group">
                         <label class="${labelClass}" for="${name}">${name}</label>
-                        <select id="${name}" name="${name}" ${required} data-type="${allNumeric ? 'integer' : 'string'}">
+                        <select id="${name}" name="${name}" ${required}>
                             <option value="">Выберите...</option>
                             ${type.map(val => `<option value="${val}">${val}</option>`).join('')}
                         </select>
@@ -901,60 +857,17 @@
                 `;
             }
 
-            // pattern: "team_id": "integer"  →  number input
-            if (type === 'integer') {
-                return `
-                    <div class="form-group">
-                        <label class="${labelClass}" for="${name}">${name}</label>
-                        <input type="number" id="${name}" name="${name}" placeholder="Введите число"
-                               ${required} data-type="integer">
-                    </div>
-                `;
-            }
+            let inputType = 'text', placeholder = name;
+            if (type === 'integer') { inputType = 'number'; placeholder = 'Введите число'; }
+            else if (type === 'date') { inputType = 'date'; }
+            else if (type === 'array') { placeholder = 'Введите значения через запятую'; }
 
-            // pattern: "player_ids": "array"  →  comma-separated; auto-detect numeric
-            if (type === 'array') {
-                return `
-                    <div class="form-group">
-                        <label class="${labelClass}" for="${name}">${name}</label>
-                        <input type="text" id="${name}" name="${name}"
-                               placeholder="Введите значения через запятую (напр. 1,2,3)"
-                               ${required} data-type="array">
-                    </div>
-                `;
-            }
-
-            // pattern: "date": "date"
-            if (type === 'date') {
-                return `
-                    <div class="form-group">
-                        <label class="${labelClass}" for="${name}">${name}</label>
-                        <input type="date" id="${name}" name="${name}" ${required} data-type="date">
-                    </div>
-                `;
-            }
-
-            // pattern: "unit": "kmh"  →  plain string, send as-is
             return `
                 <div class="form-group">
                     <label class="${labelClass}" for="${name}">${name}</label>
-                    <input type="text" id="${name}" name="${name}" placeholder="${name}"
-                           ${required} data-type="string">
+                    <input type="${inputType}" id="${name}" name="${name}" placeholder="${placeholder}" ${required}>
                 </div>
             `;
-        }
-
-        // Привести значение поля к нужному типу по data-type
-        function castValue(el, value) {
-            const dt = el.dataset.type || 'string';
-            if (dt === 'integer') return parseInt(value, 10);
-            if (dt === 'array') {
-                const parts = value.split(',').map(v => v.trim()).filter(Boolean);
-                // если все элементы числовые — массив чисел
-                const allNum = parts.every(v => /^-?\d+$/.test(v));
-                return allNum ? parts.map(Number) : parts;
-            }
-            return value; // string / date — как есть
         }
 
         // ── Direct Link ───────────────────────────────────────────────────────
@@ -1003,22 +916,18 @@
 
             for (const [key, value] of formData.entries()) {
                 if (key === 'reportType') continue;
-                if (value === '' || value === null) continue;
+                if (!value) continue;
 
-                const el = document.getElementById(key) || document.querySelector(`[name="${key}"]:not([data-flag])`);
-                params[key] = el ? castValue(el, value) : value;
+                let finalValue = value;
+                if (value.includes(',')) finalValue = value.split(',').map(v => v.trim());
+                if (report.required[key] === 'integer' || report.optional?.[key] === 'integer') finalValue = parseInt(value);
+                params[key] = finalValue;
             }
 
-            // Флаги (data-flag): обязательные всегда передаём (0 или 1),
-            // опциональные — только если чекнуты
+            // Флаги (data-flag): FormData включает только checked чекбоксы,
+            // поэтому явно проставляем 0 для непомеченных
             document.querySelectorAll('#dynamicFields input[data-flag]').forEach(cb => {
-                const isOptional = !!report.optional?.[cb.name];
-                if (isOptional) {
-                    if (cb.checked) params[cb.name] = 1;
-                    // не чекнут — не передаём вообще
-                } else {
-                    params[cb.name] = cb.checked ? 1 : 0;
-                }
+                params[cb.name] = cb.checked ? 1 : 0;
             });
 
             const payload = { sport_id: 1, alias, params };
@@ -1200,38 +1109,19 @@
                     <div class="report-params">${formatParams(report.params || {})}</div>
                     <div class="report-details">${new Date(report.timestamp).toLocaleString('ru-RU')}</div>
                     <div class="report-hash">Hash: ${report.hash}</div>
-                    <div class="report-actions" style="justify-content:space-between; align-items:center;">
-                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
-                            ${report.status === 'done' ?
-                                `<button class="btn btn-primary btn-small" onclick="downloadReport('${report.hash}')">Скачать</button>` : ''}
-                            ${report.status === 'error' || report.status === 'archive' ?
-                                `<button class="btn btn-secondary btn-small" onclick="restartReport('${report.hash}')">Рестарт</button>` : ''}
-                            ${report.status === 'in progress' ?
-                                '<span class="spinner"></span> Генерация...' : ''}
-                        </div>
-                        <button class="btn-icon" onclick="deleteReport('${report.hash}')" title="Удалить">✕</button>
+                    <div class="report-actions">
+                        ${report.status === 'done' ?
+                            `<button class="btn btn-primary btn-small" onclick="downloadReport('${report.hash}')">Скачать</button>` : ''}
+                        ${report.status === 'error' || report.status === 'archive' ?
+                            `<button class="btn btn-secondary btn-small" onclick="restartReport('${report.hash}')">Рестарт</button>` : ''}
+                        ${report.status === 'in progress' ?
+                            '<span class="spinner"></span> Генерация...' : ''}
                     </div>
                 </div>
             `).join('');
         }
 
-        // ── Delete / Clear ────────────────────────────────────────────────────
-
-        function deleteReport(hash) {
-            state.reports.delete(hash);
-            saveReports();
-            renderReports();
-            if (!hasInProgress()) stopPolling();
-        }
-
-        function clearAllReports() {
-            state.reports.clear();
-            saveReports();
-            renderReports();
-            stopPolling();
-        }
-
-                // ── Toast ─────────────────────────────────────────────────────────────
+        // ── Toast ─────────────────────────────────────────────────────────────
 
         function showToast(message, type = 'success') {
             const toast = document.createElement('div');
