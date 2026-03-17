@@ -573,15 +573,24 @@
 
         .hidden { display: none !important; }
 
+        .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
+        .empty-state-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.3; }
+
+        /* Poll paused indicator */
+        .poll-paused { color: var(--accent-primary) !important; }
+
+
+
+        /* Optional params divider */
         .optional-divider {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.75rem;
             margin: 0.5rem 0;
             color: var(--text-muted);
             font-size: 0.75rem;
             text-transform: uppercase;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.08em;
         }
         .optional-divider::before,
         .optional-divider::after {
@@ -590,14 +599,6 @@
             height: 1px;
             background: var(--border-color);
         }
-
-        .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
-        .empty-state-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.3; }
-
-        /* Poll paused indicator */
-        .poll-paused { color: var(--accent-primary) !important; }
-
-
         /* Delete / Clear buttons */
         .btn-icon {
             width: 28px;
@@ -701,7 +702,7 @@
                         <h3>Прямая ссылка (legacy)</h3>
                         <div class="link-display">
                             <input type="text" id="directLink" readonly placeholder="Заполните форму для генерации ссылки">
-                            <button class="btn btn-secondary btn-small" id="copyLegacyBtn" onclick="copyDirectLink()" disabled>Копировать</button>
+                            <button id="copyLinkBtn" class="btn btn-secondary btn-small" onclick="copyDirectLink()" disabled>Копировать</button>
                         </div>
                     </div>
                 </div>
@@ -889,7 +890,7 @@
             const alias = document.getElementById('reportType').value;
             const dynamicFields = document.getElementById('dynamicFields');
             dynamicFields.innerHTML = '';
-            if (!alias) { document.getElementById('directLink').value = ''; return; }
+            if (!alias) { document.getElementById('directLink').value = ''; const cb = document.getElementById('copyLinkBtn'); if(cb) cb.disabled = true; return; }
 
             const report = state.reportsConfig.reports.find(r => r.alias === alias);
             if (!report) return;
@@ -899,20 +900,19 @@
                 dynamicFields.insertAdjacentHTML('beforeend', createField(key, type, false));
             });
 
-            if (report.optional) {
-                const optKeys = Object.entries(report.optional).filter(([key]) => key !== 'sport' && key !== 'type');
-                if (optKeys.length > 0) {
-                    dynamicFields.insertAdjacentHTML('beforeend',
-                        '<div class="optional-divider"><span>Опциональные параметры</span></div>');
-                    optKeys.forEach(([key, type]) => {
-                        dynamicFields.insertAdjacentHTML('beforeend', createField(key, type, true));
-                    });
-                }
+            if (report.optional && Object.keys(report.optional).length > 0) {
+                dynamicFields.insertAdjacentHTML('beforeend', `
+                    <div class="optional-divider">
+                        <span>Опциональные параметры</span>
+                    </div>
+                `);
+                Object.entries(report.optional).forEach(([key, type]) => {
+                    dynamicFields.insertAdjacentHTML('beforeend', createField(key, type, true));
+                });
             }
 
             dynamicFields.querySelectorAll('input, select').forEach(el => {
                 el.addEventListener('input', updateDirectLink);
-                el.addEventListener('change', updateDirectLink);
             });
 
             updateDirectLink();
@@ -984,16 +984,15 @@
                 `;
             }
 
-            // pattern: "unit": "kmh" — concrete string value → flag/toggle
-            // (type descriptors like "integer","array","date","string" were already handled above)
+            // pattern: "unit": "kmh"  →  toggle that sends the fixed value when checked
             return `
                 <div class="form-group">
                     <label class="checkbox-group" for="${name}_cb">
                         <span class="checkbox-toggle">
-                            <input type="checkbox" id="${name}_cb" name="${name}" value="${type}" data-flag-value="${type}">
+                            <input type="checkbox" id="${name}_cb" name="${name}" value="${type}" data-flag="1" data-fixed-value="${type}">
                             <span class="toggle-slider"></span>
                         </span>
-                        <span class="checkbox-label ${labelClass}">${name} <span style="color:var(--text-muted);font-size:0.75rem;text-transform:none;">(= ${type})</span></span>
+                        <span class="checkbox-label ${labelClass}">${name}: <span style="color:var(--accent-secondary)">${type}</span></span>
                     </label>
                 </div>
             `;
@@ -1028,29 +1027,12 @@
 
         function updateDirectLink() {
             const alias = document.getElementById('reportType').value;
-            const copyBtn = document.getElementById('copyLegacyBtn');
-            if (!alias) {
-                document.getElementById('directLink').value = '';
-                if (copyBtn) copyBtn.disabled = true;
-                return;
-            }
+            if (!alias) { document.getElementById('directLink').value = ''; const cb = document.getElementById('copyLinkBtn'); if(cb) cb.disabled = true; return; }
 
             const report = state.reportsConfig.reports.find(r => r.alias === alias);
             const params = new URLSearchParams();
             params.append('sport', 'football');
             params.append('type', report.required.type);
-
-            // Check that all required fields are filled
-            let allRequiredFilled = true;
-            Object.entries(report.required).forEach(([key, type]) => {
-                if (key === 'sport' || key === 'type') return;
-                // fixed string values and flags are always "filled"
-                if (typeof type === 'string' && !['integer','array','date','string'].includes(type)) return;
-                if (type === 1) return; // flag — always has a value (0 or 1)
-                const el = document.getElementById(key) || document.querySelector(`[name="${key}"]`);
-                if (!el || !el.value || !el.value.trim()) allRequiredFilled = false;
-            });
-            if (copyBtn) copyBtn.disabled = !allRequiredFilled;
 
             const form = document.getElementById('reportForm');
             const formData = new FormData(form);
@@ -1072,17 +1054,13 @@
                 }
             });
 
-            // Флаги-строки (data-flag-value): передаём конкретное значение если чекнут
-            document.querySelectorAll('#dynamicFields input[data-flag-value]').forEach(cb => {
-                const isOptional = !!report.optional?.[cb.name];
-                if (cb.checked) {
-                    params.set(cb.name, cb.getAttribute('data-flag-value'));
-                } else if (!isOptional) {
-                    // обязательный — не передаём если не чекнут
-                }
-            });
-
             document.getElementById('directLink').value = `${CONFIG.LEGACY_BASE}?${params.toString()}`;
+
+            // Enable copy button only when all required fields have values
+            const allRequired = [...document.querySelectorAll('#dynamicFields [required]')]
+                .every(el => el.value && el.value.trim() !== '');
+            const copyBtn = document.getElementById('copyLinkBtn');
+            if (copyBtn) copyBtn.disabled = !allRequired;
         }
 
         function copyDirectLink() {
@@ -1101,11 +1079,11 @@
             const alias = document.getElementById('reportType').value;
             const report = state.reportsConfig.reports.find(r => r.alias === alias);
 
-            // Начинаем только с фиксированных required-значений (sport, type)
+            // Начинаем только с фиксированных required-значений (строки, не дескрипторы типов)
             const params = {};
             Object.entries(report.required).forEach(([k, v]) => {
-                // Берём только sport и type — остальные строковые значения теперь флаги
-                if ((k === 'sport' || k === 'type') && typeof v === 'string') {
+                // Берём только реальные значения (sport, type), пропускаем дескрипторы типов
+                if (typeof v === 'string' && !['integer','array','date','string'].includes(v)) {
                     params[k] = v;
                 }
             });
@@ -1129,16 +1107,6 @@
                     else delete params[cb.name]; // явно убираем если вдруг попало
                 } else {
                     params[cb.name] = cb.checked ? 1 : 0;
-                }
-            });
-
-            // Флаги-строки (data-flag-value): передаём конкретное значение если чекнут
-            document.querySelectorAll('#dynamicFields input[data-flag-value]').forEach(cb => {
-                const inOptional = cb.name in (report.optional || {});
-                if (cb.checked) {
-                    params[cb.name] = cb.getAttribute('data-flag-value');
-                } else {
-                    if (inOptional) delete params[cb.name];
                 }
             });
 
