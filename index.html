@@ -578,6 +578,7 @@
 
         /* Poll paused indicator */
         .poll-paused { color: var(--accent-primary) !important; }
+        .poll-countdown { display: inline-block; width: 1.6ch; text-align: right; font-family: 'Azeret Mono', monospace; }
 
 
 
@@ -1212,7 +1213,7 @@
                 if (!state.pollInterval) { clearInterval(state.countdownInterval); return; }
                 const secs = Math.max(0, Math.ceil((state.nextPollAt - Date.now()) / 1000));
                 const el = document.getElementById('pollIndicator');
-                if (el) el.innerHTML = `<span class="spinner"></span> обновление через ${secs}с`;
+                if (el) el.innerHTML = `<span class="spinner"></span> обновление через <span class="poll-countdown">${secs}</span>с`;
             }, 1000);
         }
 
