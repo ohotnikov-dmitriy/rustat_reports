@@ -573,6 +573,24 @@
 
         .hidden { display: none !important; }
 
+        .optional-divider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin: 0.5rem 0;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+        .optional-divider::before,
+        .optional-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+
         .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
         .empty-state-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.3; }
 
@@ -645,7 +663,7 @@
     <div id="mainApp" class="hidden">
         <div class="container">
             <header>
-                <h1>Reports Generator</h1>
+                <h1>⚽ Reports Generator</h1>
                 <p class="subtitle">Football Analytics Platform</p>
             </header>
 
@@ -653,11 +671,9 @@
             <div class="server-selector">
                 <div class="server-option active" onclick="selectServer('WORLD')" data-server="WORLD">
                     <div class="server-name">WORLD</div>
-                    <div class="server-url">api-reports.rustat-service.ru</div>
                 </div>
                 <div class="server-option" onclick="selectServer('RU')" data-server="RU">
                     <div class="server-name">RU</div>
-                    <div class="server-url">proxy.api-reports.rustat-service.ru</div>
                 </div>
             </div>
 
@@ -685,7 +701,7 @@
                         <h3>Прямая ссылка (legacy)</h3>
                         <div class="link-display">
                             <input type="text" id="directLink" readonly placeholder="Заполните форму для генерации ссылки">
-                            <button class="btn btn-secondary btn-small" onclick="copyDirectLink()">Копировать</button>
+                            <button class="btn btn-secondary btn-small" id="copyLegacyBtn" onclick="copyDirectLink()" disabled>Копировать</button>
                         </div>
                     </div>
                 </div>
@@ -719,7 +735,7 @@
             REPORTS_CONFIG_URL: 'https://minio.sportsvideohost.com/media/reports/reports-config_new.json',
             MINIO_BASE: 'https://minio.sportsvideohost.com',
             LEGACY_BASE: 'http://reports.rustat-service.ru/pdf/report.php',
-            POLL_INTERVAL: 30000,
+            POLL_INTERVAL: 10000,
             CDN: { 'WORLD': 'https://minio.sportsvideohost.com', 'RU': 'https://static1.rustatsport.ru' },
             MAX_CACHED_REPORTS: 10,
             STORAGE_KEY_PASSWORD: 'rg_password',
@@ -884,13 +900,19 @@
             });
 
             if (report.optional) {
-                Object.entries(report.optional).forEach(([key, type]) => {
-                    dynamicFields.insertAdjacentHTML('beforeend', createField(key, type, true));
-                });
+                const optKeys = Object.entries(report.optional).filter(([key]) => key !== 'sport' && key !== 'type');
+                if (optKeys.length > 0) {
+                    dynamicFields.insertAdjacentHTML('beforeend',
+                        '<div class="optional-divider"><span>Опциональные параметры</span></div>');
+                    optKeys.forEach(([key, type]) => {
+                        dynamicFields.insertAdjacentHTML('beforeend', createField(key, type, true));
+                    });
+                }
             }
 
             dynamicFields.querySelectorAll('input, select').forEach(el => {
                 el.addEventListener('input', updateDirectLink);
+                el.addEventListener('change', updateDirectLink);
             });
 
             updateDirectLink();
@@ -962,12 +984,17 @@
                 `;
             }
 
-            // pattern: "unit": "kmh"  →  plain string, send as-is
+            // pattern: "unit": "kmh" — concrete string value → flag/toggle
+            // (type descriptors like "integer","array","date","string" were already handled above)
             return `
                 <div class="form-group">
-                    <label class="${labelClass}" for="${name}">${name}</label>
-                    <input type="text" id="${name}" name="${name}" placeholder="${name}"
-                           ${required} data-type="string">
+                    <label class="checkbox-group" for="${name}_cb">
+                        <span class="checkbox-toggle">
+                            <input type="checkbox" id="${name}_cb" name="${name}" value="${type}" data-flag-value="${type}">
+                            <span class="toggle-slider"></span>
+                        </span>
+                        <span class="checkbox-label ${labelClass}">${name} <span style="color:var(--text-muted);font-size:0.75rem;text-transform:none;">(= ${type})</span></span>
+                    </label>
                 </div>
             `;
         }
@@ -1001,12 +1028,29 @@
 
         function updateDirectLink() {
             const alias = document.getElementById('reportType').value;
-            if (!alias) { document.getElementById('directLink').value = ''; return; }
+            const copyBtn = document.getElementById('copyLegacyBtn');
+            if (!alias) {
+                document.getElementById('directLink').value = '';
+                if (copyBtn) copyBtn.disabled = true;
+                return;
+            }
 
             const report = state.reportsConfig.reports.find(r => r.alias === alias);
             const params = new URLSearchParams();
             params.append('sport', 'football');
             params.append('type', report.required.type);
+
+            // Check that all required fields are filled
+            let allRequiredFilled = true;
+            Object.entries(report.required).forEach(([key, type]) => {
+                if (key === 'sport' || key === 'type') return;
+                // fixed string values and flags are always "filled"
+                if (typeof type === 'string' && !['integer','array','date','string'].includes(type)) return;
+                if (type === 1) return; // flag — always has a value (0 or 1)
+                const el = document.getElementById(key) || document.querySelector(`[name="${key}"]`);
+                if (!el || !el.value || !el.value.trim()) allRequiredFilled = false;
+            });
+            if (copyBtn) copyBtn.disabled = !allRequiredFilled;
 
             const form = document.getElementById('reportForm');
             const formData = new FormData(form);
@@ -1025,6 +1069,16 @@
                     if (cb.checked) params.set(cb.name, '1');
                 } else {
                     params.set(cb.name, cb.checked ? '1' : '0');
+                }
+            });
+
+            // Флаги-строки (data-flag-value): передаём конкретное значение если чекнут
+            document.querySelectorAll('#dynamicFields input[data-flag-value]').forEach(cb => {
+                const isOptional = !!report.optional?.[cb.name];
+                if (cb.checked) {
+                    params.set(cb.name, cb.getAttribute('data-flag-value'));
+                } else if (!isOptional) {
+                    // обязательный — не передаём если не чекнут
                 }
             });
 
@@ -1047,11 +1101,11 @@
             const alias = document.getElementById('reportType').value;
             const report = state.reportsConfig.reports.find(r => r.alias === alias);
 
-            // Начинаем только с фиксированных required-значений (строки, не дескрипторы типов)
+            // Начинаем только с фиксированных required-значений (sport, type)
             const params = {};
             Object.entries(report.required).forEach(([k, v]) => {
-                // Берём только реальные значения (sport, type), пропускаем дескрипторы типов
-                if (typeof v === 'string' && !['integer','array','date','string'].includes(v)) {
+                // Берём только sport и type — остальные строковые значения теперь флаги
+                if ((k === 'sport' || k === 'type') && typeof v === 'string') {
                     params[k] = v;
                 }
             });
@@ -1075,6 +1129,16 @@
                     else delete params[cb.name]; // явно убираем если вдруг попало
                 } else {
                     params[cb.name] = cb.checked ? 1 : 0;
+                }
+            });
+
+            // Флаги-строки (data-flag-value): передаём конкретное значение если чекнут
+            document.querySelectorAll('#dynamicFields input[data-flag-value]').forEach(cb => {
+                const inOptional = cb.name in (report.optional || {});
+                if (cb.checked) {
+                    params[cb.name] = cb.getAttribute('data-flag-value');
+                } else {
+                    if (inOptional) delete params[cb.name];
                 }
             });
 
