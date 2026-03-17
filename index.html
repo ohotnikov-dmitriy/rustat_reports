@@ -665,7 +665,7 @@
     <div id="mainApp" class="hidden">
         <div class="container">
             <header>
-                <h1>⚽ Reports Generator</h1>
+                <h1>Reports Generator</h1>
                 <p class="subtitle">Football Analytics Platform</p>
             </header>
 
@@ -1020,7 +1020,14 @@
                 return allNum ? parts.map(Number) : parts;
             }
 
-            // всё остальное ("unit": "kmh", "date": "date", строки) — как есть
+            // "date": "date" → конвертируем YYYY-MM-DD в DD.MM.YYYY
+            if (type === 'date') {
+                const parts = value.split('-');
+                if (parts.length === 3) return `${parts[2]}.${parts[1]}.${parts[0]}`;
+                return value;
+            }
+
+            // всё остальное ("unit": "kmh", строки) — как есть
             return value;
         }
 
