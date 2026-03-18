@@ -671,11 +671,11 @@
 
             <!-- Server Selector -->
             <div class="server-selector">
-                <div class="server-option active" onclick="selectServer('WORLD')" data-server="WORLD">
-                    <div class="server-name">WORLD</div>
-                </div>
-                <div class="server-option" onclick="selectServer('RU')" data-server="RU">
+                <div class="server-option active" onclick="selectServer('RU')" data-server="RU">
                     <div class="server-name">RU</div>
+                </div>
+                <div class="server-option" onclick="selectServer('WORLD')" data-server="WORLD">
+                    <div class="server-name">WORLD</div>
                 </div>
             </div>
 
@@ -746,7 +746,7 @@
 
         let state = {
             password: '',
-            selectedServer: 'WORLD',
+            selectedServer: 'RU',
             reportsConfig: null,
             reports: new Map(),
             pollInterval: null,
