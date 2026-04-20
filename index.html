@@ -735,6 +735,7 @@
         const CONFIG = {
             WORKER_URL: 'https://reports.dhnf11.workers.dev',
             REPORTS_CONFIG_URL: 'https://minio.sportsvideohost.com/media/reports/reports-config_new.json',
+            LANGUAGES_CONFIG_URL: 'https://minio.sportsvideohost.com/media/reports/languages_reports_config_new.json',
             MINIO_BASE: 'https://minio.sportsvideohost.com',
             LEGACY_BASE: 'http://reports.rustat-service.ru/pdf/report.php',
             POLL_INTERVAL: 10000,
@@ -748,6 +749,7 @@
             password: '',
             selectedServer: 'RU',
             reportsConfig: null,
+            languages: [],
             reports: new Map(),
             pollInterval: null,
             countdownInterval: null,
@@ -853,9 +855,15 @@
 
         async function init() {
             try {
-                const response = await fetch(CONFIG.REPORTS_CONFIG_URL);
-                const config = await response.json();
-                state.reportsConfig = config.find(s => s.sport === 'football');
+                const [reportsResp, langsResp] = await Promise.all([
+                    fetch(CONFIG.REPORTS_CONFIG_URL),
+                    fetch(CONFIG.LANGUAGES_CONFIG_URL)
+                ]);
+                const reportsData = await reportsResp.json();
+                const langsData = await langsResp.json();
+                state.reportsConfig = reportsData.find(s => s.sport === 'football');
+                const langEntry = langsData.find(s => s.sport === 'football');
+                state.languages = langEntry ? langEntry.languages : [];
                 if (state.reportsConfig) populateReportTypes();
             } catch (error) {
                 showToast('Ошибка загрузки конфигурации: ' + error.message, 'error');
@@ -922,6 +930,21 @@
         function createField(name, type, optional) {
             const labelClass = optional ? 'optional' : '';
             const required = optional ? '' : 'required';
+
+            // special case: "lang_id"  →  language selector loaded from config
+            if (name === 'lang_id') {
+                const options = state.languages.map(l =>
+                    `<option value="${l.lang_id}" ${l.lang_id === 0 ? 'selected' : ''}>${l.lang_id} (${l.name_rus})</option>`
+                ).join('');
+                return `
+                    <div class="form-group">
+                        <label class="${labelClass}" for="${name}">${name}</label>
+                        <select id="${name}" name="${name}" ${required} data-type="integer">
+                            ${options}
+                        </select>
+                    </div>
+                `;
+            }
 
             // pattern: "short_data": 1  →  flag/toggle
             if (type === 1) {
