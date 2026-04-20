@@ -985,6 +985,20 @@
                 `;
             }
 
+            // pattern: "fps": "range(1,26)"  →  number input with min/max constraints
+            const rangeMatch = typeof type === 'string' && type.match(/^range\((\d+),(\d+)\)$/);
+            if (rangeMatch) {
+                const minVal = parseInt(rangeMatch[1], 10);
+                const maxVal = parseInt(rangeMatch[2], 10) - 1;
+                return `
+                    <div class="form-group">
+                        <label class="${labelClass}" for="${name}">${name} <span style="color:var(--text-muted);font-size:0.8em">(${minVal}–${maxVal})</span></label>
+                        <input type="number" id="${name}" name="${name}" placeholder="${minVal}–${maxVal}"
+                               min="${minVal}" max="${maxVal}" ${required} data-type="integer">
+                    </div>
+                `;
+            }
+
             // pattern: "unit": "kmh"  →  toggle that sends the fixed value when checked
             return `
                 <div class="form-group">
